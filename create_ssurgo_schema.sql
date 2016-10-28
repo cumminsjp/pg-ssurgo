@@ -370,18 +370,85 @@ CREATE TABLE mupolygon (
 
 ALTER TABLE mupolygon OWNER TO postgres;
 
-SET default_tablespace = ssurgo_tblspc_3;
+--
+-- Name: soilmu_wm; Type: TABLE; Schema: ssurgo; Owner: postgres
+--
+
+CREATE TABLE soilmu_wm (
+    id integer NOT NULL,
+    geom public.geometry(MultiPolygon,3857),
+    areasymbol character varying,
+    spatialver integer,
+    mysym character varying,
+    mukey character varying,
+    "Shape_Length" double precision,
+    "Shape_Area" double precision
+);
+
+
+ALTER TABLE soilmu_wm OWNER TO postgres;
+
+SET default_tablespace = pg_default;
 
 --
--- Name: mv_technical_description; Type: MATERIALIZED VIEW; Schema: ssurgo; Owner: postgres; Tablespace: ssurgo_tblspc_3
+-- Name: mv_soil_mapunit; Type: MATERIALIZED VIEW; Schema: ssurgo; Owner: postgres; Tablespace: pg_default
+--
+
+CREATE MATERIALIZED VIEW mv_soil_mapunit AS
+ SELECT ply.id,
+    ply.geom,
+    ply.areasymbol,
+    ply.spatialver,
+    ply.mysym,
+    ply.mukey,
+    muagg.musym,
+    muagg.muname,
+    muagg.mustatus,
+    muagg.hydgrpdcd
+   FROM ((soilmu_wm ply
+     LEFT JOIN mapunit mu ON (((ply.mukey)::text = (mu.mukey)::text)))
+     LEFT JOIN muaggatt muagg ON (((ply.mukey)::text = (muagg.mukey)::text)))
+  WITH NO DATA;
+
+
+ALTER TABLE mv_soil_mapunit OWNER TO postgres;
+
+--
+-- Name: MATERIALIZED VIEW mv_soil_mapunit; Type: COMMENT; Schema: ssurgo; Owner: postgres
+--
+
+COMMENT ON MATERIALIZED VIEW mv_soil_mapunit IS 'Materialized spatial view that joins map unit geometry to the mapunit and map unit attributes.  The geometry is web mercator (3857)';
+
+
+SET default_tablespace = pg_default;
+
+--
+-- Name: mv_technical_description; Type: MATERIALIZED VIEW; Schema: ssurgo; Owner: postgres; Tablespace: pg_default
 --
 
 CREATE MATERIALIZED VIEW mv_technical_description AS
- SELECT cotext.cokey,
-    string_agg((cotext.text)::text, ' / '::text) AS string_agg
-   FROM cotext
-  WHERE ((cotext.comptextkind)::text = 'Nontechnical description'::text)
-  GROUP BY cotext.cokey, cotext.text
+ WITH cte AS (
+         SELECT cotext.recdate,
+            cotext.comptextkind,
+            cotext.textcat,
+            cotext.textsubcat,
+            cotext.text,
+            cotext.cokey,
+            cotext.cotextkey,
+            row_number() OVER (PARTITION BY cotext.cokey ORDER BY cotext.recdate DESC) AS nr
+           FROM cotext
+          WHERE ((cotext.comptextkind)::text = 'Nontechnical description'::text)
+        )
+ SELECT cte.recdate,
+    cte.comptextkind,
+    cte.textcat,
+    cte.textsubcat,
+    cte.text,
+    cte.cokey,
+    cte.cotextkey,
+    cte.nr
+   FROM cte
+  WHERE (cte.nr = 1)
   WITH NO DATA;
 
 
@@ -393,26 +460,6 @@ ALTER TABLE mv_technical_description OWNER TO postgres;
 
 COMMENT ON MATERIALIZED VIEW mv_technical_description IS 'Aggregated component technical descriptions.';
 
-
-SET default_tablespace = '';
-
---
--- Name: soilmu_wm; Type: TABLE; Schema: ssurgo; Owner: postgres
---
-
-CREATE TABLE soilmu_wm (
-    id integer NOT NULL,
-    geom public.geometry(MultiPolygon,3857),
-    "AREASYMBOL" character varying,
-    "SPATIALVER" integer,
-    "MUSYM" character varying,
-    "MUKEY" character varying,
-    "Shape_Length" double precision,
-    "Shape_Area" double precision
-);
-
-
-ALTER TABLE soilmu_wm OWNER TO postgres;
 
 --
 -- Name: soilmu_wm_id_seq; Type: SEQUENCE; Schema: ssurgo; Owner: postgres
@@ -442,8 +489,8 @@ ALTER SEQUENCE soilmu_wm_id_seq OWNED BY soilmu_wm.id;
 CREATE VIEW svw_lccd_soils AS
  SELECT ply.id,
     ply.geom,
-    ply."AREASYMBOL" AS areasymbol,
-    ply."SPATIALVER" AS spatialver,
+    ply.areasymbol,
+    ply.spatialver,
     muagg.musym,
     muagg.muname,
     muagg.mustatus,
@@ -485,12 +532,89 @@ CREATE VIEW svw_lccd_soils AS
     muagg.awmmfpwwta,
     muagg.mukey
    FROM ((soilmu_wm ply
-     LEFT JOIN mapunit mu ON (((ply."MUKEY")::text = (mu.mukey)::text)))
-     LEFT JOIN muaggatt muagg ON (((ply."MUKEY")::text = (muagg.mukey)::text)))
+     LEFT JOIN mapunit mu ON (((ply.mukey)::text = (mu.mukey)::text)))
+     LEFT JOIN muaggatt muagg ON (((ply.mukey)::text = (muagg.mukey)::text)))
   WHERE public.st_intersects(ply.geom, public.st_transform(public.st_geomfromewkt('SRID=26918;POLYGON((348330.2881 4384093.4924,348330.2881 4472392.5335,438915.6896 4472392.5335,438915.6896 4384093.4924,348330.2881 4384093.4924))'::text), 3857));
 
 
 ALTER TABLE svw_lccd_soils OWNER TO postgres;
+
+--
+-- Name: svw_soil_mapunit; Type: VIEW; Schema: ssurgo; Owner: postgres
+--
+
+CREATE VIEW svw_soil_mapunit AS
+ SELECT row_number() OVER () AS id,
+    ply.areasymbol,
+    ply.spatialver,
+    muagg.musym,
+    muagg.muname,
+    muagg.mustatus,
+    c.compname,
+    c.compkind,
+    c.runoff,
+    c.earthcovkind1,
+    c.earthcovkind2,
+    c.hydricon,
+    c.hydricrating,
+    c.drainagecl,
+    c.geomdesc,
+    c.taxclname,
+    c.cokey,
+    ply.geom,
+    ct.textcat,
+    ct.text
+   FROM ((((soilmu_wm ply
+     LEFT JOIN component c ON (((ply.mukey)::text = (c.mukey)::text)))
+     LEFT JOIN mapunit mu ON (((ply.mukey)::text = (mu.mukey)::text)))
+     LEFT JOIN muaggatt muagg ON (((ply.mukey)::text = (muagg.mukey)::text)))
+     LEFT JOIN mv_technical_description ct ON (((c.cokey)::text = (ct.cokey)::text)))
+  WHERE ((c.majcompflag = 'Yes'::bpchar) AND ((c.compkind)::text = 'Series'::text));
+
+
+ALTER TABLE svw_soil_mapunit OWNER TO postgres;
+
+--
+-- Name: VIEW svw_soil_mapunit; Type: COMMENT; Schema: ssurgo; Owner: postgres
+--
+
+COMMENT ON VIEW svw_soil_mapunit IS 'SSURGO map units join to components and cotext (latest non-technical text).';
+
+
+SET default_tablespace = '';
+
+--
+-- Name: test_geom; Type: TABLE; Schema: ssurgo; Owner: postgres
+--
+
+CREATE TABLE test_geom (
+    id integer NOT NULL,
+    geom public.geometry
+);
+
+
+ALTER TABLE test_geom OWNER TO postgres;
+
+--
+-- Name: test_geom_id_seq; Type: SEQUENCE; Schema: ssurgo; Owner: postgres
+--
+
+CREATE SEQUENCE test_geom_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER TABLE test_geom_id_seq OWNER TO postgres;
+
+--
+-- Name: test_geom_id_seq; Type: SEQUENCE OWNED BY; Schema: ssurgo; Owner: postgres
+--
+
+ALTER SEQUENCE test_geom_id_seq OWNED BY test_geom.id;
+
 
 --
 -- Name: id; Type: DEFAULT; Schema: ssurgo; Owner: postgres
@@ -504,6 +628,13 @@ ALTER TABLE ONLY lancaster_soils ALTER COLUMN id SET DEFAULT nextval('lancaster_
 --
 
 ALTER TABLE ONLY soilmu_wm ALTER COLUMN id SET DEFAULT nextval('soilmu_wm_id_seq'::regclass);
+
+
+--
+-- Name: id; Type: DEFAULT; Schema: ssurgo; Owner: postgres
+--
+
+ALTER TABLE ONLY test_geom ALTER COLUMN id SET DEFAULT nextval('test_geom_id_seq'::regclass);
 
 
 --
@@ -523,6 +654,28 @@ ALTER TABLE ONLY soilmu_wm
 
 
 --
+-- Name: test_geom_pkey; Type: CONSTRAINT; Schema: ssurgo; Owner: postgres
+--
+
+ALTER TABLE ONLY test_geom
+    ADD CONSTRAINT test_geom_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: component_majcompflag_mukey_cokey_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
+--
+
+CREATE INDEX component_majcompflag_mukey_cokey_idx ON component USING btree (majcompflag, mukey, cokey);
+
+
+--
+-- Name: cotext_cokey_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
+--
+
+CREATE INDEX cotext_cokey_idx ON cotext USING btree (cokey);
+
+
+--
 -- Name: cotext_comptextkind_cokey_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
 --
 
@@ -535,6 +688,24 @@ CREATE INDEX cotext_comptextkind_cokey_idx ON cotext USING btree (comptextkind, 
 
 CREATE INDEX mapunit_mukey_musym_muname_idx ON mapunit USING btree (mukey, musym, muname);
 
+
+SET default_tablespace = pg_default;
+
+--
+-- Name: mv_soil_mapunit_id_hydgrpdcd_areasymbol_spatialver_mysym_mu_idx; Type: INDEX; Schema: ssurgo; Owner: postgres; Tablespace: pg_default
+--
+
+CREATE UNIQUE INDEX mv_soil_mapunit_id_hydgrpdcd_areasymbol_spatialver_mysym_mu_idx ON mv_soil_mapunit USING btree (id, hydgrpdcd, areasymbol, spatialver, mysym, mukey, musym, muname, mustatus) WITH (fillfactor='100');
+
+
+--
+-- Name: mv_soil_mapunit_id_idx; Type: INDEX; Schema: ssurgo; Owner: postgres; Tablespace: pg_default
+--
+
+CREATE UNIQUE INDEX mv_soil_mapunit_id_idx ON mv_soil_mapunit USING btree (id);
+
+
+SET default_tablespace = '';
 
 --
 -- Name: mv_technical_description_cokey_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
@@ -561,21 +732,21 @@ CREATE INDEX sidx_soilmu_wm_geom ON soilmu_wm USING gist (geom);
 -- Name: soilmu_wm_AREASYMBOL_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
 --
 
-CREATE INDEX "soilmu_wm_AREASYMBOL_idx" ON soilmu_wm USING btree ("AREASYMBOL");
+CREATE INDEX "soilmu_wm_AREASYMBOL_idx" ON soilmu_wm USING btree (areasymbol);
 
 
 --
 -- Name: soilmu_wm_MUSYM_MUKEY_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
 --
 
-CREATE INDEX "soilmu_wm_MUSYM_MUKEY_idx" ON soilmu_wm USING btree ("MUSYM", "MUKEY");
+CREATE INDEX "soilmu_wm_MUSYM_MUKEY_idx" ON soilmu_wm USING btree (mysym, mukey);
 
 
 --
 -- Name: soilmu_wm_SPATIALVER_idx; Type: INDEX; Schema: ssurgo; Owner: postgres
 --
 
-CREATE INDEX "soilmu_wm_SPATIALVER_idx" ON soilmu_wm USING btree ("SPATIALVER");
+CREATE INDEX "soilmu_wm_SPATIALVER_idx" ON soilmu_wm USING btree (spatialver);
 
 
 --
@@ -583,6 +754,15 @@ CREATE INDEX "soilmu_wm_SPATIALVER_idx" ON soilmu_wm USING btree ("SPATIALVER");
 --
 
 CREATE INDEX soilmu_wm_id_idx ON soilmu_wm USING btree (id);
+
+
+SET default_tablespace = pg_default;
+
+--
+-- Name: ssurgo_mv_soil_mapunit_geom_sx; Type: INDEX; Schema: ssurgo; Owner: postgres; Tablespace: pg_default
+--
+
+CREATE INDEX ssurgo_mv_soil_mapunit_geom_sx ON mv_soil_mapunit USING gist (geom);
 
 
 --
@@ -678,16 +858,6 @@ GRANT SELECT,REFERENCES ON TABLE mupolygon TO ssurgo;
 
 
 --
--- Name: mv_technical_description; Type: ACL; Schema: ssurgo; Owner: postgres
---
-
-REVOKE ALL ON TABLE mv_technical_description FROM PUBLIC;
-REVOKE ALL ON TABLE mv_technical_description FROM postgres;
-GRANT ALL ON TABLE mv_technical_description TO postgres;
-GRANT SELECT,REFERENCES ON TABLE mv_technical_description TO ssurgo;
-
-
---
 -- Name: soilmu_wm; Type: ACL; Schema: ssurgo; Owner: postgres
 --
 
@@ -695,6 +865,26 @@ REVOKE ALL ON TABLE soilmu_wm FROM PUBLIC;
 REVOKE ALL ON TABLE soilmu_wm FROM postgres;
 GRANT ALL ON TABLE soilmu_wm TO postgres;
 GRANT SELECT,REFERENCES ON TABLE soilmu_wm TO ssurgo;
+
+
+--
+-- Name: mv_soil_mapunit; Type: ACL; Schema: ssurgo; Owner: postgres
+--
+
+REVOKE ALL ON TABLE mv_soil_mapunit FROM PUBLIC;
+REVOKE ALL ON TABLE mv_soil_mapunit FROM postgres;
+GRANT ALL ON TABLE mv_soil_mapunit TO postgres;
+GRANT SELECT,REFERENCES ON TABLE mv_soil_mapunit TO ssurgo;
+
+
+--
+-- Name: mv_technical_description; Type: ACL; Schema: ssurgo; Owner: postgres
+--
+
+REVOKE ALL ON TABLE mv_technical_description FROM PUBLIC;
+REVOKE ALL ON TABLE mv_technical_description FROM postgres;
+GRANT ALL ON TABLE mv_technical_description TO postgres;
+GRANT SELECT,REFERENCES ON TABLE mv_technical_description TO ssurgo;
 
 
 --
@@ -715,6 +905,26 @@ REVOKE ALL ON TABLE svw_lccd_soils FROM PUBLIC;
 REVOKE ALL ON TABLE svw_lccd_soils FROM postgres;
 GRANT ALL ON TABLE svw_lccd_soils TO postgres;
 GRANT SELECT,REFERENCES ON TABLE svw_lccd_soils TO ssurgo;
+
+
+--
+-- Name: svw_soil_mapunit; Type: ACL; Schema: ssurgo; Owner: postgres
+--
+
+REVOKE ALL ON TABLE svw_soil_mapunit FROM PUBLIC;
+REVOKE ALL ON TABLE svw_soil_mapunit FROM postgres;
+GRANT ALL ON TABLE svw_soil_mapunit TO postgres;
+GRANT SELECT,REFERENCES ON TABLE svw_soil_mapunit TO ssurgo;
+
+
+--
+-- Name: test_geom; Type: ACL; Schema: ssurgo; Owner: postgres
+--
+
+REVOKE ALL ON TABLE test_geom FROM PUBLIC;
+REVOKE ALL ON TABLE test_geom FROM postgres;
+GRANT ALL ON TABLE test_geom TO postgres;
+GRANT SELECT,REFERENCES ON TABLE test_geom TO ssurgo;
 
 
 --
