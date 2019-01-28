@@ -214,54 +214,6 @@ COMMENT ON COLUMN cotext.comptextkind IS 'domain: component_text_kind
 ';
 
 
---
--- Name: lancaster_soils; Type: TABLE; Schema: ssurgo; Owner: postgres
---
-
-CREATE TABLE lancaster_soils (
-    id integer NOT NULL,
-    geom public.geometry(MultiPolygon,26918),
-    "AREA" double precision,
-    "PERIMETER" double precision,
-    "PA071_" double precision,
-    "MINOR1" double precision,
-    "DXF_TEXT" character varying,
-    "MUNAME" character varying,
-    "MUKEY" character varying,
-    "CALCACRES" double precision,
-    "CALCACTIME" character varying,
-    "MUSYM" character varying,
-    "NIRRCLDS" character varying,
-    "MUSYS" character varying,
-    "AT_ACRES" double precision,
-    "HydrcRatng" character varying,
-    "Shape_Length" double precision,
-    "Shape_Area" double precision
-);
-
-
-ALTER TABLE lancaster_soils OWNER TO postgres;
-
---
--- Name: lancaster_soils_id_seq; Type: SEQUENCE; Schema: ssurgo; Owner: postgres
---
-
-CREATE SEQUENCE lancaster_soils_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-
-ALTER TABLE lancaster_soils_id_seq OWNER TO postgres;
-
---
--- Name: lancaster_soils_id_seq; Type: SEQUENCE OWNED BY; Schema: ssurgo; Owner: postgres
---
-
-ALTER SEQUENCE lancaster_soils_id_seq OWNED BY lancaster_soils.id;
-
 
 --
 -- Name: mapunit; Type: TABLE; Schema: ssurgo; Owner: postgres
@@ -620,13 +572,6 @@ ALTER SEQUENCE test_geom_id_seq OWNED BY test_geom.id;
 -- Name: id; Type: DEFAULT; Schema: ssurgo; Owner: postgres
 --
 
-ALTER TABLE ONLY lancaster_soils ALTER COLUMN id SET DEFAULT nextval('lancaster_soils_id_seq'::regclass);
-
-
---
--- Name: id; Type: DEFAULT; Schema: ssurgo; Owner: postgres
---
-
 ALTER TABLE ONLY soilmu_wm ALTER COLUMN id SET DEFAULT nextval('soilmu_wm_id_seq'::regclass);
 
 
@@ -635,15 +580,7 @@ ALTER TABLE ONLY soilmu_wm ALTER COLUMN id SET DEFAULT nextval('soilmu_wm_id_seq
 --
 
 ALTER TABLE ONLY test_geom ALTER COLUMN id SET DEFAULT nextval('test_geom_id_seq'::regclass);
-
-
---
--- Name: lancaster_soils_pkey; Type: CONSTRAINT; Schema: ssurgo; Owner: postgres
---
-
-ALTER TABLE ONLY lancaster_soils
-    ADD CONSTRAINT lancaster_soils_pkey PRIMARY KEY (id);
-
+ 
 
 --
 -- Name: soilmu_wm_pkey; Type: CONSTRAINT; Schema: ssurgo; Owner: postgres
@@ -714,11 +651,6 @@ SET default_tablespace = '';
 CREATE INDEX mv_technical_description_cokey_idx ON mv_technical_description USING btree (cokey);
 
 
---
--- Name: sidx_lancaster_soils_geom; Type: INDEX; Schema: ssurgo; Owner: postgres
---
-
-CREATE INDEX sidx_lancaster_soils_geom ON lancaster_soils USING gist (geom);
 
 
 --
@@ -806,25 +738,6 @@ REVOKE ALL ON TABLE cotext FROM postgres;
 GRANT ALL ON TABLE cotext TO postgres;
 GRANT SELECT,REFERENCES ON TABLE cotext TO ssurgo;
 
-
---
--- Name: lancaster_soils; Type: ACL; Schema: ssurgo; Owner: postgres
---
-
-REVOKE ALL ON TABLE lancaster_soils FROM PUBLIC;
-REVOKE ALL ON TABLE lancaster_soils FROM postgres;
-GRANT ALL ON TABLE lancaster_soils TO postgres;
-GRANT SELECT,REFERENCES ON TABLE lancaster_soils TO ssurgo;
-
-
---
--- Name: lancaster_soils_id_seq; Type: ACL; Schema: ssurgo; Owner: postgres
---
-
-REVOKE ALL ON SEQUENCE lancaster_soils_id_seq FROM PUBLIC;
-REVOKE ALL ON SEQUENCE lancaster_soils_id_seq FROM postgres;
-GRANT ALL ON SEQUENCE lancaster_soils_id_seq TO postgres;
-GRANT SELECT,USAGE ON SEQUENCE lancaster_soils_id_seq TO ssurgo;
 
 
 --
